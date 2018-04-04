@@ -1,0 +1,68 @@
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: citus-master-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 50Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: citus-master
+  labels:
+    app: citus-master
+spec:
+  selector:
+    app: citus-master
+  clusterIP: None
+  ports:
+  - port: 5432
+---
+apiVersion: apps/v1beta2
+kind: Deployment
+metadata:
+  name: citus-master
+spec:
+  selector:
+    matchLabels:
+      app: citus-master
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: citus-master
+    spec:
+      containers:
+      - name: citus
+        image: citusdata/citus:7.3.0
+        ports:
+        - containerPort: 5432
+        env:
+        - name: PGDATA
+          value: /var/lib/postgresql/data/pgdata
+        - name: PGPASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: citus-secrets
+              key: password
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: citus-secrets
+              key: password
+        volumeMounts:
+        - name: storage
+          mountPath: /var/lib/postgresql/data
+        livenessProbe:
+          exec:
+            command:
+            - ./pg_healthcheck
+          initialDelaySeconds: 60
+      volumes:
+        - name: storage
+          persistentVolumeClaim:
+            claimName: citus-master-pvc
